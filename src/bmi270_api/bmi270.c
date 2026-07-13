@@ -42,13 +42,31 @@
  ****************************************************************************/
 #include "bmi270.h"
 
+/* PROGMEM for the config file array on AVR (see the declaration below) */
+#ifdef __AVR__
+#include <avr/pgmspace.h>
+#endif
+
 /***************************************************************************/
 
 /*!              Global Variable
  ****************************************************************************/
 
-/*! @name  Global array that stores the configuration file of BMI270 */
+/*! @name  Global array that stores the configuration file of BMI270.
+ * On AVR (Harvard architecture) a plain const array is copied into SRAM at
+ * startup; at 8192 bytes this fails the build's size check on every AVR
+ * board (an ATmega2560 has 8 KB of SRAM total, an Uno 2 KB). Store it in
+ * program memory instead. The API never dereferences these bytes itself --
+ * they flow only through the user write callback (upload_file ->
+ * bmi2_set_regs -> dev->write, register BMI2_INIT_DATA_ADDR), so the
+ * flash-aware read happens there (see writeRegisters in
+ * SparkFun_BMI270_Arduino_Library.cpp). This declaration is the only
+ * modification to the Bosch API files. */
+#ifdef __AVR__
+const uint8_t bmi270_config_file[] PROGMEM = {
+#else
 const uint8_t bmi270_config_file[] = {
+#endif
     0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x3d, 0xb1, 0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x91, 0x03, 0x80, 0x2e, 0xbc,
     0xb0, 0x80, 0x2e, 0xa3, 0x03, 0xc8, 0x2e, 0x00, 0x2e, 0x80, 0x2e, 0x00, 0xb0, 0x50, 0x30, 0x21, 0x2e, 0x59, 0xf5,
     0x10, 0x30, 0x21, 0x2e, 0x6a, 0xf5, 0x80, 0x2e, 0x3b, 0x03, 0x00, 0x00, 0x00, 0x00, 0x08, 0x19, 0x01, 0x00, 0x22,

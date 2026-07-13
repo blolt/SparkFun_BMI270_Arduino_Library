@@ -1,5 +1,24 @@
 #include "SparkFun_BMI270_Arduino_Library.h"
 
+#ifdef __AVR__
+#include <avr/pgmspace.h>
+// On AVR the 8 KB BMI270 config file lives in program memory (see the
+// declaration in bmi270.c). Those bytes reach the bus only through the write
+// callbacks below, and BMI2_INIT_DATA_ADDR is written from exactly one place
+// in the Bosch API (upload_file), always sourced from the config file -- so
+// keying on the register address identifies exactly the bytes that need a
+// flash-aware read.
+static inline uint8_t readDataByte(uint8_t regAddress, const uint8_t* dataBuffer, uint32_t i)
+{
+    return (regAddress == BMI2_INIT_DATA_ADDR) ? pgm_read_byte(dataBuffer + i) : dataBuffer[i];
+}
+#else
+static inline uint8_t readDataByte(uint8_t regAddress, const uint8_t* dataBuffer, uint32_t i)
+{
+    return dataBuffer[i];
+}
+#endif
+
 /// @brief Default constructor
 BMI270::BMI270()
 {
@@ -19,7 +38,19 @@ int8_t BMI270::begin()
     sensor.write = writeRegisters;
     sensor.delay_us = usDelay;
     sensor.intf_ptr = &interfaceData;
+#ifdef __AVR__
+    // AVR's Wire library has a 32-byte TX buffer, and each config file chunk
+    // is written as 1 register byte + read_write_len data bytes. With a value
+    // of 32, the last byte of every chunk is silently dropped by Wire and the
+    // config load fails. 30 is the largest value that fits (it must stay
+    // even per the Bosch API's INIT_ADDR bytes/2 addressing). Harmless for
+    // SPI, required for I2C. read_write_len is a documented host-dependent
+    // integration parameter ("Supported length depends on target machine",
+    // Bosch's own example integration).
+    sensor.read_write_len = 30;
+#else
     sensor.read_write_len = 32;
+#endif
 
     // Initialize the sensor
     err = bmi270_init(&sensor);
@@ -1285,11 +1316,11 @@ BMI2_INTF_RETURN_TYPE BMI270::writeRegistersI2C(uint8_t regAddress, const uint8_
 
     // Write the address
     interfaceData->i2cPort->write(regAddress);
-    
+
     // Write all the data
     for(uint32_t i = 0; i < numBytes; i++)
     {
-        interfaceData->i2cPort->write(dataBuffer[i]);
+        interfaceData->i2cPort->write(readDataByte(regAddress, dataBuffer, i));
     }
 
     // End transmission
@@ -1315,11 +1346,11 @@ BMI2_INTF_RETURN_TYPE BMI270::writeRegistersSPI(uint8_t regAddress, const uint8_
     
     // Write the address
     interfaceData->spiPort->transfer(regAddress);
-    
+
     // Write all the data
     for(uint32_t i = 0; i < numBytes; i++)
     {
-        interfaceData->spiPort->transfer(dataBuffer[i]);
+        interfaceData->spiPort->transfer(readDataByte(regAddress, dataBuffer, i));
     }
 
     // End transmission
