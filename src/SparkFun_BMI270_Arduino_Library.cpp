@@ -1203,8 +1203,13 @@ BMI2_INTF_RETURN_TYPE BMI270::readRegistersI2C(uint8_t regAddress, uint8_t* data
         return BMI2_E_COM_FAIL;
     }
 
-    // Read bytes from these registers
-    interfaceData->i2cPort->requestFrom(interfaceData->i2cAddress, numBytes);
+    // Read bytes from these registers. If fewer bytes arrive than requested
+    // (NACK, bus error), fail instead of returning BMI2_OK with a partially
+    // stale buffer that the caller would treat as valid data
+    if(interfaceData->i2cPort->requestFrom(interfaceData->i2cAddress, numBytes) != numBytes)
+    {
+        return BMI2_E_COM_FAIL;
+    }
 
     // Store all requested bytes
     for(uint32_t i = 0; i < numBytes && interfaceData->i2cPort->available(); i++)
