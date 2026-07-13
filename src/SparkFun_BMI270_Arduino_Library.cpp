@@ -1334,7 +1334,19 @@ BMI2_INTF_RETURN_TYPE BMI270::writeRegistersSPI(uint8_t regAddress, const uint8_
 /// @param interfacePtr Pointer to interface data, see BMI270_InterfaceData
 void BMI270::usDelay(uint32_t period, void* interfacePtr)
 {
-    delayMicroseconds(period);
+    // delayMicroseconds() is not accurate for large values on some platforms
+    // (on AVR it is only accurate to 16383 us and silently overflows above
+    // that, which breaks the 20 ms config load validation wait inside
+    // bmi270_init). Delegate whole milliseconds to delay()
+    if(period >= 1000)
+    {
+        delay(period / 1000);
+        delayMicroseconds(period % 1000);
+    }
+    else
+    {
+        delayMicroseconds(period);
+    }
 }
 
 /// @brief Helper function to generate the correct conversion value for accelerometer data
